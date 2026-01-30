@@ -29,13 +29,13 @@ python tdo_scanner.py --help
 `python tdo_scanner.py <genome.fa> <annotation.gtf> <pattern> <range> <mismatch>`
 
 ### Arguments
-|Argument|	Description	|Example|
-|:-------------:|:--------------------------------------:|:-------------------:||
+|Argument|Description|Example|
+|:-------------:|:--------------------------------------:|:-------------------:|
 |**genome.fa**|	Reference genome in FASTA format	|hg38.fa|
 |**annotation.gtf**	|Gene annotation in GTF format	|hg38.gtf|
-|**pattern**|	Sequence pattern in LEFT(MIDDLE)RIGHT format|	GTTTA(GA)GCTA
-|**range**	|Variable length range for Type 1 (min-max)|	2-6
-|**mismatch**|	Maximum allowed mismatches for Type 2|	2
+|**pattern**|	Sequence pattern in LEFT(MIDDLE)RIGHT format|	GTTTA(GA)GCTA|
+|**range**	|Variable length range for Type 1 (min-max)|	2-6|
+|**mismatch**|	Maximum allowed mismatches for Type 2|	2|
 ## Example
 ```
 python tdo_scanner.py hg38.fa hg38.gtf "GTTTA(GA)GCTA" "2-6" 2

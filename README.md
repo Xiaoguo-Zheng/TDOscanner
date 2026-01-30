@@ -12,6 +12,8 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
   - Mature RNA-level scanning (spliced transcripts)
 
 ## Installation
+- The code 
+
 - Prerequisites
 Python 3.6 or higher
 Required Python packages:
@@ -148,7 +150,8 @@ If you use TDO-scanner in your research, please cite:
 TDO-scanner: A tool for scanning genome and transcriptome for specific sequence motifs.
 Developed by Xiaoguo Zheng (zhengxiaoguo@sjtu.edu.cn)
 
-
+##License
+MIT license
 
 ## Support
 For questions, bug reports, or feature requests:

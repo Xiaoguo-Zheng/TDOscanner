@@ -4,15 +4,15 @@
 A specialized bioinformatics tool for scanning genome and transcriptome sequences to identify specific DNA/RNA motifs with variable-length spacers (Type 1) or fixed-spacer motifs with backbone mismatches (Type 2).
 
 # Features
-## Dual scanning modes:
+### Dual scanning modes:
   - Type 1: Variable-length insertion between conserved flanking sequences
   - Type 2: Fixed middle sequence with allowed mismatches in flanking regions
-## Dual-level analysis:
+### Dual-level analysis:
   - Gene-level scanning (genomic DNA)
   - Mature RNA-level scanning (spliced transcripts)
-### Strand-aware processing: Automatically handles forward/reverse strand sequences
-### Comprehensive output: Includes genomic coordinates, upstream sequences, and match details
-### GTF annotation support: Uses standard GTF files for gene and transcript annotation
+- Strand-aware processing: Automatically handles forward/reverse strand sequences
+- Comprehensive output: Includes genomic coordinates, upstream sequences, and match details
+- GTF annotation support: Uses standard GTF files for gene and transcript annotation
 ## Installation
 - Prerequisites
 Python 3.6 or higher

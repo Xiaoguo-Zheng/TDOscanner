@@ -23,7 +23,7 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
 `pip install regex pysam`
 ## Quick Start
 ```
-git clone https://github.com/yourusername/tdo-scanner.git
+git clone https://github.com/Xiaoguo-Zheng/TDOscanner.git
 cd tdo-scanner
 python tdo_scanner.py --help
 ```

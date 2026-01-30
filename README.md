@@ -12,11 +12,14 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
   - Mature RNA-level scanning (spliced transcripts)
 
 ## Installation
-- The code 
+### System Requirements
+- **Operating System:** Linux (Ubuntu 20.04+, CentOS 7+, or compatible distributions)
+- **Memory:** 8 GB RAM minimum, 16+ GB recommended for large genomes
+- **Storage:** 50+ GB free disk space for reference genomes
 
-- Prerequisites
-Python 3.6 or higher
-Required Python packages:
+### Prerequisites
+-Python 3.6 or higher
+-Required Python packages:
 `pip install regex pysam`
 ## Quick Start
 ```

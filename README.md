@@ -60,8 +60,6 @@ gffread -w 0.mm39__matureRNA_seq.fa -g Mus_musculus.GRCm39.dna.primary_assembly.
 #human  
 gffread -w 0.hg38_matureRNA_seq.fa -g Homo_sapiens.GRCh38.dna.primary_assembly.fa -F -W Homo_sapiens.GRCh38.113.chr.gtf  
   
-##get all candidate prePAM_20bp from transcripts  
-perl get_all_candidate_PAM_from_reference.pl Homo_sapiens.GRCh38.dna.primary_assembly.fa > Homo_sapiens.GRCh38_all_candidate_PAM.txt  
 
 
 ## Example

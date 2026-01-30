@@ -10,9 +10,7 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
 ### Dual-level analysis:
   - Gene-level scanning (genomic DNA)
   - Mature RNA-level scanning (spliced transcripts)
-- Strand-aware processing: Automatically handles forward/reverse strand sequences
-- Comprehensive output: Includes genomic coordinates, upstream sequences, and match details
-- GTF annotation support: Uses standard GTF files for gene and transcript annotation
+
 ## Installation
 - Prerequisites
 Python 3.6 or higher

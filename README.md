@@ -1,4 +1,4 @@
-# TDO-scanner
+# TDOscanner
 ## TracrRNA-Dependent Off-target Scanner
 
 A specialized bioinformatics tool for scanning genome and transcriptome sequences to identify specific DNA/RNA motifs with variable-length spacers (Type 1) or fixed-spacer motifs with backbone mismatches (Type 2).
@@ -81,10 +81,10 @@ python tdo_scanner.py hg38.fa hg38.gtf "GTTTA(GA)GCTA" "2-6" 2
 ### Output Files
   - The tool generates four output files:
 
-1.output_gene_type1.txt - Type 1 matches at gene level
-2.output_gene_type2.txt - Type 2 matches at gene level
-3.output_matureRNA_type1.txt - Type 1 matches at RNA level
-4.output_matureRNA_type2.txt - Type 2 matches at RNA level
+1.output_gene_type1.txt - Type 1 matches at gene level  
+2.output_gene_type2.txt - Type 2 matches at gene level  
+3.output_matureRNA_type1.txt - Type 1 matches at RNA level  
+4.output_matureRNA_type2.txt - Type 2 matches at RNA level  
 
 ## Output Columns
 ### Gene-level output:
@@ -150,8 +150,8 @@ TranscriptPos: Position range in the mature RNA sequence (1-based)
 ## Citation
 If you use TDO-scanner in your research, please cite:
 
-TDO-scanner: A tool for scanning genome and transcriptome for specific sequence motifs.
-Developed by Xiaoguo Zheng (zhengxiaoguo@sjtu.edu.cn)
+TDOscanner: A tool for scanning genome and transcriptome for specific sequence motifs.
+
 
 ##License
 MIT license
@@ -164,3 +164,30 @@ For questions, bug reports, or feature requests:
 ## Version History
 v1.0.0 (Current): Initial release with dual scanning modes
 Planned features: Parallel processing, BED format input, web interface
+
+
+# seq_boosting  
+
+This repository contains the code submitted with our paper for sequence binary classification.
+The main model used in the paper is XGBoost, with CatBoost and LightGBM as baselines for comparison.
+
+## Run
+
+```bash
+python model/seq_boosting_compare.py
+```
+
+## Reproduce Conda Environment (One Line)
+
+```bash
+conda create -n boosting_repro python=3.14 -y && conda run -n boosting_repro pip install .
+```
+
+## Note on Results
+
+Due to training randomness, outputs under `results/boosting_outputs` are not exactly identical in every run.
+However, the relative model performance is consistent with the paper, and the reported models remain stably among the top performers.
+
+
+
+

@@ -17,6 +17,13 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
 - **Memory:** 8 GB RAM minimum, 16+ GB recommended for large genomes
 - **Storage:** 50+ GB free disk space for reference genomes
 
+## Create analysis environment
+```
+conda create -n TDOscanner python=3.14
+conda activate TDOscanner
+```
+
+
 ### Prerequisites
 -Python 3.6 or higher
 -Required Python packages:
@@ -42,27 +49,45 @@ python tdo_scanner.py --help
 
 ##Download reference  
 #Mus_musculus reference  
-https://ftp.ensembl.org/pub/release-113/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz  
-
+```
+#as mm39.fa
+wget https://ftp.ensembl.org/pub/release-113/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
+gunzip Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
+```
 #Homo_sapiens reference  
-https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz  
-
+```
+#as hg38.fa
+wget https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+```
 #Mus_musculus gtf  
-https://ftp.ensembl.org/pub/release-113/gtf/mus_musculus/Mus_musculus.GRCm39.113.chr.gtf.gz  
-
+```
+#asmm39.gtf
+wget https://ftp.ensembl.org/pub/release-113/gtf/mus_musculus/Mus_musculus.GRCm39.113.chr.gtf.gz
+gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
+```
 #Homo_sapiens gtf  
-https://ftp.ensembl.org/pub/release-113/gtf/homo_sapiens/Homo_sapiens.GRCh38.113.chr.gtf.gz
-  
+```
+#as hg38.gtf
+wget https://ftp.ensembl.org/pub/release-113/gtf/homo_sapiens/Homo_sapiens.GRCh38.113.chr.gtf.gz
+gunzip Homo_sapiens.GRCh38.113.chr.gtf.gz
+```  
 ##install gffread  
+```
+#under conda environment
 conda install bioconda::gffread
-  
+```  
 ##Extract transcripts fasta  
 #mouse  
-gffread -w 0.mm39__matureRNA_seq.fa -g Mus_musculus.GRCm39.dna.primary_assembly.fa -F -W Mus_musculus.GRCm39.113.chr.gtf  
-  
+```
+#as mm39.matureRNA.fa
+gffread -w 0.mm39_matureRNA_seq.fa -g Mus_musculus.GRCm39.dna.primary_assembly.fa -F -W Mus_musculus.GRCm39.113.chr.gtf  
+```  
 #human  
+```
+#as hg38.matureRNA.fa
 gffread -w 0.hg38_matureRNA_seq.fa -g Homo_sapiens.GRCh38.dna.primary_assembly.fa -F -W Homo_sapiens.GRCh38.113.chr.gtf  
-  
+```  
 
 
 ## Example

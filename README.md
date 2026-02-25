@@ -19,7 +19,7 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
 
 ## Create analysis environment
 ```
-conda create -n TDOscanner python=3.14
+conda create -n TDOscanner -c bioconda -c conda-forge python=3.11 conda-forge::regex conda-forge::bzip2 bioconda::pysam bioconda::htslib -y
 conda activate TDOscanner
 ```
 

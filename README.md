@@ -19,7 +19,7 @@ A specialized bioinformatics tool for scanning genome and transcriptome sequence
 
 ## Create analysis environment
 ```
-conda create -n TDOscanner -c bioconda -c conda-forge python=3.11 conda-forge::regex conda-forge::bzip2 bioconda::pysam bioconda::htslib -y
+conda create -n TDOscanner -c bioconda -c conda-forge python=3.11 conda-forge::regex conda-forge::bzip2 bioconda::pysam bioconda::htslib bioconda::gffread -y
 conda activate TDOscanner
 ```
 
@@ -50,25 +50,25 @@ python tdo_scanner.py --help
 ##Download reference  
 #Mus_musculus reference  
 ```
-#as mm39.fa
+#mm39.fa
 wget https://ftp.ensembl.org/pub/release-113/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
 gunzip Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
 ```
 #Homo_sapiens reference  
 ```
-#as hg38.fa
+#hg38.fa
 wget https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 ```
 #Mus_musculus gtf  
 ```
-#asmm39.gtf
+#mm39.gtf
 wget https://ftp.ensembl.org/pub/release-113/gtf/mus_musculus/Mus_musculus.GRCm39.113.chr.gtf.gz
 gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
 ```
 #Homo_sapiens gtf  
 ```
-#as hg38.gtf
+#hg38.gtf
 wget https://ftp.ensembl.org/pub/release-113/gtf/homo_sapiens/Homo_sapiens.GRCh38.113.chr.gtf.gz
 gunzip Homo_sapiens.GRCh38.113.chr.gtf.gz
 ```  
@@ -80,12 +80,12 @@ conda install bioconda::gffread
 ##Extract transcripts fasta  
 #mouse  
 ```
-#as mm39.matureRNA.fa
+#mm39.matureRNA.fa
 gffread -w 0.mm39_matureRNA_seq.fa -g Mus_musculus.GRCm39.dna.primary_assembly.fa -F -W Mus_musculus.GRCm39.113.chr.gtf  
 ```  
 #human  
 ```
-#as hg38.matureRNA.fa
+#hg38.matureRNA.fa
 gffread -w 0.hg38_matureRNA_seq.fa -g Homo_sapiens.GRCh38.dna.primary_assembly.fa -F -W Homo_sapiens.GRCh38.113.chr.gtf  
 ```  
 

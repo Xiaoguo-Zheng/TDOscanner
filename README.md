@@ -72,11 +72,6 @@ gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
 wget https://ftp.ensembl.org/pub/release-113/gtf/homo_sapiens/Homo_sapiens.GRCh38.113.chr.gtf.gz
 gunzip Homo_sapiens.GRCh38.113.chr.gtf.gz
 ```  
-##install gffread  
-```
-#under conda environment
-conda install bioconda::gffread
-```  
 ##Extract transcripts fasta  
 #mouse  
 ```

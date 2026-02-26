@@ -376,7 +376,7 @@ class TDOscanner:
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="TDOscanner: Search gene/RNA motifs. Developed by LazyMan.")
+    parser = argparse.ArgumentParser(description="TDOscanner: Search gene/RNA motifs.")
     parser.add_argument("fasta", help="Path to reference genome (hg38.fa)")
     parser.add_argument("gtf", help="Path to annotation file (hg38.gtf)")
     parser.add_argument("pattern", help="Sequence pattern, e.g., GTTTA(GA)GCTA")

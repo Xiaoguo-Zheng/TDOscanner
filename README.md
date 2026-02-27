@@ -164,7 +164,7 @@ If you use TDO-scanner in your research, please cite:
 TDOscanner: A tool for scanning genome and transcriptome for specific sequence motifs.
 
 
-##License
+## License
 MIT license
 
 ## Support

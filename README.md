@@ -72,6 +72,7 @@ gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
 ```
 python tdo_scanner.py hg38.fa hg38.gtf "GTTTTA(GA)GCTA" "2-6" 2
 python get_candidate_offtarget.py hg38.fa
+#python get_candidate_offtarget.py hg38.fa -m 2 #default mismatch=1, can set to 0 or 2
 ```
 
 ## Input Pattern Format

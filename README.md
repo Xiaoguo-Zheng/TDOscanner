@@ -23,20 +23,17 @@ conda create -n TDOscanner -c bioconda -c conda-forge python=3.11 conda-forge::r
 conda activate TDOscanner
 ```
 
-
-### Prerequisites
--Python 3.6 or higher
--Required Python packages:
-`pip install regex pysam`
 ## Quick Start
 ```
 git clone https://github.com/Xiaoguo-Zheng/TDOscanner.git
 cd tdo-scanner
-python tdo_scanner.py --help
+python tdo_scanner.py --help  
+python get_candidate_offtarget.py --help   
 ```
 ## Usage
 ### Basic Command
 `python tdo_scanner.py <genome.fa> <annotation.gtf> <pattern> <range> <mismatch>`
+`python get_candidate_offtarget.py <genome.fa> `
 
 ### Arguments
 |Argument|Description|Example|
@@ -47,47 +44,34 @@ python tdo_scanner.py --help
 |**range**	|Variable length range for Type 1 (min-max)|	2-6|
 |**mismatch**|	Maximum allowed mismatches for Type 2|	2|
 
-##Download reference  
-#Mus_musculus reference  
-```
-#mm39.fa
-wget https://ftp.ensembl.org/pub/release-113/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
-gunzip Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
-```
+##Download reference 
 #Homo_sapiens reference  
 ```
 #hg38.fa
 wget https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-```
-#Mus_musculus gtf  
-```
-#mm39.gtf
-wget https://ftp.ensembl.org/pub/release-113/gtf/mus_musculus/Mus_musculus.GRCm39.113.chr.gtf.gz
-gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
-```
-#Homo_sapiens gtf  
-```
+
 #hg38.gtf
 wget https://ftp.ensembl.org/pub/release-113/gtf/homo_sapiens/Homo_sapiens.GRCh38.113.chr.gtf.gz
 gunzip Homo_sapiens.GRCh38.113.chr.gtf.gz
 ```  
-##Extract transcripts fasta  
-#mouse  
+
+#Mus_musculus reference  
 ```
-#mm39.matureRNA.fa
-gffread -w 0.mm39_matureRNA_seq.fa -g Mus_musculus.GRCm39.dna.primary_assembly.fa -F -W Mus_musculus.GRCm39.113.chr.gtf  
-```  
-#human  
+#mm39.fa
+wget https://ftp.ensembl.org/pub/release-113/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
+gunzip Mus_musculus.GRCm39.dna.primary_assembly.fa.gz
+
+#mm39.gtf
+wget https://ftp.ensembl.org/pub/release-113/gtf/mus_musculus/Mus_musculus.GRCm39.113.chr.gtf.gz
+gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
 ```
-#hg38.matureRNA.fa
-gffread -w 0.hg38_matureRNA_seq.fa -g Homo_sapiens.GRCh38.dna.primary_assembly.fa -F -W Homo_sapiens.GRCh38.113.chr.gtf  
-```  
 
 
 ## Example
 ```
-python tdo_scanner.py hg38.fa hg38.gtf "GTTTA(GA)GCTA" "2-6" 2
+python tdo_scanner.py hg38.fa hg38.gtf "GTTTTA(GA)GCTA" "2-6" 2
+python get_candidate_offtarget.py hg38.fa
 ```
 
 ## Input Pattern Format
@@ -103,20 +87,27 @@ python tdo_scanner.py hg38.fa hg38.gtf "GTTTA(GA)GCTA" "2-6" 2
 
 1.output_gene_type1.txt - Type 1 matches at gene level  
 2.output_gene_type2.txt - Type 2 matches at gene level  
-3.output_matureRNA_type1.txt - Type 1 matches at RNA level  
-4.output_matureRNA_type2.txt - Type 2 matches at RNA level  
+3.output_matureRNA_type1.txt - Type 1 matches at spliced RNA level  
+4.output_matureRNA_type2.txt - Type 2 matches at spliced RNA level  
 
-## Output Columns
+## Output Columns  
 ### Gene-level output:
 ```
-GeneID    Chr    Start    End    Strand    Upstream20bp    MatchSeq    ExtraInfo
-ExtraInfo: For Type 1 = Variable part sequence; For Type 2 = Mismatch count
-```
+#type1 output
+GeneID	GeneName	GeneBiotype	MatchedSequence	Tar_location	VariablePart	upstream20bp	MM0_Count	MM1_Count	MM0_Locations	MM1_Locations
 
+#type2 output
+Gene_location	Strand	GeneID	GeneName	GeneBiotype	MatchedSequence	Tar_location	MismatchCount	upstream20bp	MM0_Count	MM1_Count	MM0_Locations	MM1_Locations
+
+```
 ### RNA-level output:
 ```
-TranscriptID    GenomicChr    GenomicStart    GenomicEnd    Strand    TranscriptPos    Upstream20bp    MatchSeq    ExtraInfo
-TranscriptPos: Position range in the mature RNA sequence (1-based)
+#type1 output
+Transcript_location	Strand	TranscriptID	TranscriptBiotype	GeneID	GeneName	MatchedSequence	VariablePart	RNA_Location	Genomic_Location	upstream20bp	MM0_Count	MM1_Count	MM0_Locations	MM1_Locations
+
+#type2 output
+Transcript_location	Strand	TranscriptID	TranscriptBiotype	GeneID	GeneName	MatchedSequence	MismatchCount	RNA_Location	Genomic_Location	upstream20bp	MM0_Count	MM1_Count	MM0_Locations	MM1_Locations
+
 ```
 ## Algorithm Details
 ### Type 1 Scanning

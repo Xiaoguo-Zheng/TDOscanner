@@ -11,117 +11,79 @@ with variable inserts (Type 1) or fixed inserts with backbone mismatches (Type 2
 import argparse
 import sys
 import re
-import regex  # Requires check: pip install regex
+import regex
 import pysam
 from collections import defaultdict
 
 # -----------------------------------------------------------------------------
-# Helper Classes and Functions
+# Utils
 # -----------------------------------------------------------------------------
 
 def reverse_complement(seq):
-    """
-    Returns the reverse complement of a DNA sequence.
-    """
-    complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A', 
-                  'N': 'N', 'a': 't', 'c': 'g', 'g': 'c', 't': 'a'}
-    return "".join(complement.get(base, base) for base in reversed(seq))
+    complement = str.maketrans('ATCGNatcgn', 'TAGCNtagcn')
+    return seq.translate(complement)[::-1]a
 
 def parse_input_pattern(pattern_str):
-    """
-    Parses the pattern string like "GTTTA(GA)GCTA".
-    Returns: (Left_seq, Middle_seq, Right_seq)
-    """
     match = re.match(r"([ACGTNacgtn]+)\(([ACGTNacgtn]+)\)([ACGTNacgtn]+)", pattern_str)
     if not match:
         print(f"Error: Pattern format '{pattern_str}' is invalid. Expected format: LEFT(MIDDLE)RIGHT")
         sys.exit(1)
     return match.groups()
 
-def get_upstream_seq(fasta, chrom, start_0b, strand, length=20):
+def get_upstream_20bp(fasta, chrom, start_0b, end_0b, strand):
     """
-    Retrieves the 20bp upstream sequence based on strand.
-    start_0b: 0-based start index of the feature.
+    Get 20bp upstream relative to the feature direction.
     """
-
     try:
         if strand == '+':
-            up_start = max(0, start_0b - length)
-            seq = fasta.fetch(chrom, up_start, start_0b)
-            return seq.upper()
+            p_start = max(0, start_0b - 20)
+            return fasta.fetch(chrom, p_start, start_0b).upper()
         else:
-            
-            up_start = start_0b
-            up_end = start_0b + length
-            seq = fasta.fetch(chrom, up_start, up_end)
-            return reverse_complement(seq.upper())
-    except Exception as e:
-        return "N" * length
+            p_end = end_0b + 20
+            seq = fasta.fetch(chrom, end_0b, p_end).upper()
+            return reverse_complement(seq)
+    except:
+        return "N" * 20
+
+def fmt_loc(chrom, start, end):
+    """Format 0-based [start, end) to 1-based chr:start-end"""
+    return f"{chrom}:{start+1}-{end}"
 
 # -----------------------------------------------------------------------------
-# Core Scanner Logic
+# Core Logic
 # -----------------------------------------------------------------------------
 
 class TDOscanner:
     def __init__(self, fasta_path, gtf_path, pattern, var_len_range, mismatch_limit):
         self.fasta_path = fasta_path
         self.gtf_path = gtf_path
-        
-        # Parse Pattern
         self.left, self.mid, self.right = parse_input_pattern(pattern)
         
-        # Parse params
         try:
             vl = var_len_range.split('-')
             self.min_var = int(vl[0])
             self.max_var = int(vl[1])
             self.mismatches = int(mismatch_limit)
         except ValueError:
-            print("Error: Invalid numeric parameters.")
-            sys.exit(1)
+            sys.exit("Error: Invalid numeric parameters.")
 
-        # Prepare Regex Objects
-        # Type 1: Left + Variable(min,max) + Right (Exact backbone matches)
-        # Note: regex library allows variable length lookbehinds/aheads, but simple composition is easier.
+        # Type 1: Variable Gap
         self.regex_type1 = regex.compile(f"({self.left})([ACGTN]{{{self.min_var},{self.max_var}}})({self.right})", regex.IGNORECASE)
         
-        # Type 2: Full sequence with mismatches, but strictly check middle later
-        self.full_ref_seq = self.left + self.mid + self.right
-        # Use fuzzy regex allowing substitution only (s<=X)
-        self.regex_type2 = regex.compile(f"(?e)(({self.full_ref_seq}){{s<={self.mismatches}}})", regex.IGNORECASE)
+        # Type 2: Fixed Backbone with mismatches
+        full_ref = self.left + self.mid + self.right
+        # (?e) enables error counting. 
+        self.regex_type2 = regex.compile(f"(?e)(({full_ref}){{s<={self.mismatches}}})", regex.IGNORECASE)
 
-        # Output handlers
-        self.out_files = {}
-        
-    def open_outputs(self):
-        self.out_files['gene_t1'] = open("output_gene_type1.txt", "w")
-        self.out_files['gene_t2'] = open("output_gene_type2.txt", "w")
-        self.out_files['rna_t1'] = open("output_matureRNA_type1.txt", "w")
-        self.out_files['rna_t2'] = open("output_matureRNA_type2.txt", "w")
-        
-        # Write Headers
-        header_base = "GeneID\tChr\tStart\tEnd\tStrand\tUpstream20bp\tMatchSeq"
-        self.out_files['gene_t1'].write(f"{header_base}\tVariablePart\n")
-        self.out_files['gene_t2'].write(f"{header_base}\tMismatchCount\n")
-        
-        header_rna = "TranscriptID\tGenomicChr\tGenomicStart\tGenomicEnd\tStrand\tTramscriptPos\tUpstream20bp\tMatchSeq"
-        self.out_files['rna_t1'].write(f"{header_rna}\tVariablePart\n")
-        self.out_files['rna_t2'].write(f"{header_rna}\tMismatchCount\n")
-
-    def close_outputs(self):
-        for f in self.out_files.values():
-            f.close()
+        # Storage for aggregation
+        self.gene_hits_buffer = defaultdict(list)
+        self.rna_hits_buffer = defaultdict(list) 
 
     def load_gtf_data(self):
-        """
-        Parses GTF to extract Gene coordinates and Exon structures.
-        Only keeps 'gene' and 'exon' features.
-        """
         print("Loading GTF annotation...")
-        self.genes = {} # gene_id -> {chrom, start, end, strand}
-        self.transcripts = defaultdict(list) # transcript_id -> list of (start, end) tuples
-        self.tx_to_gene = {} # transcript_id -> gene_id
-        self.tx_info = {} # transcript_id -> {chrom, strand}
+        self.genes = {}
+        self.transcripts = defaultdict(list)
+        self.tx_meta = {} 
 
         with open(self.gtf_path, 'r') as f:
             for line in f:
@@ -129,259 +91,312 @@ class TDOscanner:
                 parts = line.strip().split('\t')
                 if len(parts) < 9: continue
                 
-                feat_type = parts[2]
+                feat = parts[2]
                 chrom = parts[0]
-                start = int(parts[3])
-                end = int(parts[4])
                 strand = parts[6]
-                attributes = parts[8]
-
-                # Simple attribute parser
-                attr_dict = {}
-                for attr in attributes.split(';'):
-                    attr = attr.strip()
-                    if not attr: continue
-                    if " " in attr:
-                        key, val = attr.split(' ', 1)
-                        val = val.replace('"', '')
-                        attr_dict[key] = val
-
-                if feat_type == 'gene':
-                    gid = attr_dict.get('gene_id')
-                    if gid:
-                        self.genes[gid] = {'chr': chrom, 'start': start, 'end': end, 'strand': strand}
+                start = int(parts[3]) - 1
+                end = int(parts[4])
                 
-                elif feat_type == 'exon':
+                attr = parts[8]
+                attr_dict = {}
+                for x in attr.split(';'):
+                    if not x.strip(): continue
+                    try:
+                        k, v = x.strip().split(' ', 1)
+                        attr_dict[k] = v.strip('"')
+                    except:
+                        pass
+
+                if feat == 'gene':
+                    gid = attr_dict.get('gene_id')
+                    gname = attr_dict.get('gene_name', gid)
+                    gtype = attr_dict.get('gene_biotype') or attr_dict.get('gene_type', 'NA')
+                    
+                    if gid:
+                        self.genes[gid] = {
+                            'chr': chrom, 'start': start, 'end': end, 'strand': strand,
+                            'name': gname, 'biotype': gtype, 'id': gid
+                        }
+                
+                elif feat == 'exon':
                     tid = attr_dict.get('transcript_id')
                     gid = attr_dict.get('gene_id')
                     if tid:
-                        # Store essential info
-                        self.transcripts[tid].append((start, end)) # 1-based GTF coords
-                        self.tx_to_gene[tid] = gid
-                        self.tx_info[tid] = {'chr': chrom, 'strand': strand}
+                        self.transcripts[tid].append((start, end))
+                        if tid not in self.tx_meta:
+                            tname = attr_dict.get('transcript_name', tid)
+                            ttype = attr_dict.get('transcript_biotype') or attr_dict.get('transcript_type', 'NA')
+                            gname = attr_dict.get('gene_name', gid)
+                            
+                            self.tx_meta[tid] = {
+                                'chr': chrom, 'strand': strand, 'gid': gid,
+                                'tname': tname, 'ttype': ttype, 'gname': gname
+                            }
 
-        # Sort exons for transcripts
         for tid in self.transcripts:
             self.transcripts[tid].sort()
 
+    def get_rna_genomic_fragments(self, tid, rna_start_idx, rna_end_idx):
+        exons = self.transcripts[tid]
+        strand = self.tx_meta[tid]['strand']
+        
+        genomic_coords = []
+        if strand == '+':
+            for s, e in exons:
+                genomic_coords.extend(range(s, e))
+        else:
+            for s, e in reversed(exons):
+                genomic_coords.extend(range(e-1, s-1, -1))
+        
+        if rna_start_idx >= len(genomic_coords) or rna_end_idx > len(genomic_coords):
+             return "Error_Bounds"
+
+        match_g_indices = genomic_coords[rna_start_idx : rna_end_idx]
+        match_g_indices.sort()
+        
+        if not match_g_indices: return ""
+        
+        blocks = []
+        current_start = match_g_indices[0]
+        current_prev = match_g_indices[0]
+        
+        for pos in match_g_indices[1:]:
+            if pos == current_prev + 1:
+                current_prev = pos
+            else:
+                blocks.append((current_start, current_prev + 1))
+                current_start = pos
+                current_prev = pos
+        blocks.append((current_start, current_prev + 1))
+        
+        chrom = self.tx_meta[tid]['chr']
+        block_strs = [f"{chrom}:{b_s+1}-{b_e}" for b_s, b_e in blocks]
+        
+        return ";".join(block_strs)
+
     def run(self):
-        self.open_outputs()
         self.load_gtf_data()
         
-        # Open Fasta
-        with pysam.FastaFile(self.fasta_path) as fasta:
-            
-            # --- Analysis 1: GENE Level ---
-            print("Scanning Gene sequences...")
-            for gene_id, info in self.genes.items():
-                chrom = info['chr']
-                start = info['start'] - 1 # Convert to 0-based
-                end = info['end'] # pysam end is exclusive
-                strand = info['strand']
-                
-                try:
-                    seq_dna = fasta.fetch(chrom, start, end).upper()
-                except KeyError:
-                    # Contig in GTF not in Fasta
-                    continue
-
-                if strand == '-':
-                    seq_search = reverse_complement(seq_dna)
-                else:
-                    seq_search = seq_dna
-
-                self.scan_and_write(seq_search, gene_id, chrom, start, end, strand, fasta, mode="gene")
-
-            # --- Analysis 2: Mature RNA Level ---
-            print("Scanning Mature RNA sequences...")
-            for tid, exons in self.transcripts.items():
-                chrom = self.tx_info[tid]['chr']
-                strand = self.tx_info[tid]['strand']
-                
-                # Construct Mature RNA
-                rna_seq = ""
-                exon_seqs = []
-                
-                # Exons are 1-based start, inclusive end
-                coords_map = [] # To map RNA index back to Genome index
-                
-                temp_seq = ""
-                coords_list = [] # List of genomic coords for each base in RNA
-                
-                # Extract sequence for raw exons
-                raw_exons_seq = []
-                for (es, ee) in exons:
-                    try:
-                        # 0-based start, ee is exclusive for pysam logic
-                        # es is 1-based in GTF -> es-1 for 0-based
-                        seq = fasta.fetch(chrom, es-1, ee).upper()
-                        raw_exons_seq.append(seq)
-                        
-                        # Generate genomic coordinates for every base
-                        for pos in range(es, ee + 1):
-                            coords_list.append(pos)
-                    except:
-                        pass
-                
-                if not raw_exons_seq: continue
-
-                full_dnaseq = "".join(raw_exons_seq)
-                
-                # Handle Strand
-                if strand == '-':
-                    rna_seq = reverse_complement(full_dnaseq)
-                    # Coordinates also need to be reversed to match the 5'->3' RNA sequence
-                    coords_list = coords_list[::-1]
-                else:
-                    rna_seq = full_dnaseq
-                
-                self.scan_and_write(rna_seq, tid, chrom, 0, 0, strand, fasta, mode="rna", rna_coords_map=coords_list)
-
-        self.close_outputs()
-        print("Done. Check output files.")
-
-    def scan_and_write(self, sequence, obj_id, chrom, g_start_0b, g_end, strand, fasta_handle, mode="gene", rna_coords_map=None):
-        """
-        Generic function to scan a sequence and write results.
-        """
+        files = {
+            'gene_t1': open("output_gene_type1.txt", "w"),
+            'gene_t2': open("output_gene_type2.txt", "w"),
+            'rna_t1': open("output_matureRNA_type1.txt", "w"),
+            'rna_t2': open("output_matureRNA_type2.txt", "w")
+        }
         
-        # --- Type 1 Scan ---
-        for match in self.regex_type1.finditer(sequence):
-            # match.groups() -> (Left, VarPart, Right)
-            full_match_seq = match.group(0)
-            var_part = match.group(2)
-            
-            start_idx = match.start()
-            end_idx = match.end()
-            
-            self.write_hit(mode=mode, type_idx="t1", 
-                           obj_id=obj_id, chrom=chrom, strand=strand, 
-                           seq_start_idx=start_idx, seq_end_idx=end_idx, 
-                           match_seq=full_match_seq, extra_info=var_part, 
-                           fasta=fasta_handle, 
-                           gene_g_start=g_start_0b, gene_g_end=g_end,
-                           rna_coords_map=rna_coords_map)
+        h_gene_t1 = "Gene_location\tStrand\tGeneID\tGeneName\tGeneBiotype\tMatchedSequence\tTar_location\tVariablePart\tupstream20bp\n"
+        h_gene_t2 = "Gene_location\tStrand\tGeneID\tGeneName\tGeneBiotype\tMatchedSequence\tTar_location\tMismatchCount\tupstream20bp\n"
+        h_rna_t1 = "Transcript_location\tStrand\tTranscriptID\tTranscriptBiotype\tGeneID\tGeneName\tMatchedSequence\tVariablePart\tRNA_Location\tGenomic_Location\tupstream20bp\n"
+        h_rna_t2 = "Transcript_location\tStrand\tTranscriptID\tTranscriptBiotype\tGeneID\tGeneName\tMatchedSequence\tMismatchCount\tRNA_Location\tGenomic_Location\tupstream20bp\n"
 
-        # --- Type 2 Scan ---
-        for match in self.regex_type2.finditer(sequence):
-            full_match_seq = match.group(0)
+        files['gene_t1'].write(h_gene_t1)
+        files['gene_t2'].write(h_gene_t2)
+        files['rna_t1'].write(h_rna_t1)
+        files['rna_t2'].write(h_rna_t2)
+
+        fasta = pysam.FastaFile(self.fasta_path)
+        
+        print("Scanning Genes...")
+        for gid, info in self.genes.items():
+            chrom = info['chr']
+            strand = info['strand']
+            try:
+                seq = fasta.fetch(chrom, info['start'], info['end']).upper()
+            except: continue
             
+            search_seq = reverse_complement(seq) if strand == '-' else seq
+            self._scan_gene(search_seq, gid, info, fasta)
+
+        self._flush_gene_buffer(files, fasta)
+
+        print("Scanning Transcripts...")
+        for tid, exons in self.transcripts.items():
+            info = self.tx_meta[tid]
+            chrom = info['chr']
+            strand = info['strand']
             
-            l_len = len(self.left)
-            m_len = len(self.mid)
-            r_len = len(self.right)
+            parts = []
+            for s, e in exons:
+                try:
+                    parts.append(fasta.fetch(chrom, s, e).upper())
+                except:
+                    parts.append("N" * (e-s))
             
+            full_seq = "".join(parts)
+            if strand == '-': full_seq = reverse_complement(full_seq)
             
-            if self.mid not in full_match_seq:
-                # If the exact middle sequence isn't found, it's definitely not a Type 2 match
-                # (since Middle must be Fixed)
+            self._scan_rna(full_seq, tid, info, files, fasta)
+
+        self._flush_rna_buffer(files)
+
+        for f in files.values(): f.close()
+        fasta.close()
+        print("Done.")
+
+    def _is_core_intact(self, matched_seq):
+        """Check if middle part matches self.mid strictly"""
+        len_left = len(self.left)
+        len_mid = len(self.mid)
+        # Assuming substitution only (s<=2), length is preserved.
+        if len(matched_seq) != (len_left + len_mid + len(self.right)):
+             return False
+        core_seq = matched_seq[len_left : len_left + len_mid]
+        return core_seq.upper() == self.mid.upper()
+
+    def _scan_gene(self, seq, gid, info, fasta):
+        chrom = info['chr']
+        strand = info['strand']
+        g_start_offset = info['start']
+
+        def get_genomic_coords(s_idx, e_idx):
+            if strand == '+':
+                g_s = g_start_offset + s_idx
+                g_e = g_start_offset + e_idx 
+            else:
+                g_s = info['end'] - e_idx
+                g_e = info['end'] - s_idx 
+            return g_s, g_e
+
+        # Type 1 (Regex already handles consume logic fine as overlaps are rare/handled by distinct pattern)
+        for m in self.regex_type1.finditer(seq):
+            g_s, g_e = get_genomic_coords(m.start(), m.end())
+            up20 = get_upstream_20bp(fasta, chrom, g_s, g_e, strand)
+            var_part = m.group(2)
+            match_seq = m.group(0)
+            key = (chrom, g_s, g_e, strand, match_seq, var_part, 0, up20)
+            self.gene_hits_buffer["t1"].append({'loc_key': key, 'info': info})
+
+        # Type 2 - ADDED overlapped=True
+        # This matches Perl's window-sliding behavior
+        for m in self.regex_type2.finditer(seq, overlapped=True):
+            match_seq = m.group(0)
+            
+            if not self._is_core_intact(match_seq):
+                continue
+
+            g_s, g_e = get_genomic_coords(m.start(), m.end())
+            up20 = get_upstream_20bp(fasta, chrom, g_s, g_e, strand)
+            cnt = sum(m.fuzzy_counts)
+            key = (chrom, g_s, g_e, strand, match_seq, "", cnt, up20)
+            self.gene_hits_buffer["t2"].append({'loc_key': key, 'info': info})
+
+    def _flush_gene_buffer(self, files, fasta):
+        for mtype in ["t1", "t2"]:
+            aggregated = defaultdict(list)
+            for item in self.gene_hits_buffer[mtype]:
+                aggregated[item['loc_key']].append(item['info'])
+            
+            for key, info_list in aggregated.items():
+                chrom, g_s, g_e, strand, match_seq, var_part, mm_count, up20 = key
+                
+                g_locs = ";".join([fmt_loc(i['chr'], i['start'], i['end']) for i in info_list])
+                ids = ";".join([i['id'] for i in info_list])
+                names = ";".join([i['name'] for i in info_list])
+                types = ";".join([i['biotype'] for i in info_list])
+                match_loc = fmt_loc(chrom, g_s, g_e)
+                
+                if mtype == "t1":
+                    line = f"{g_locs}\t{strand}\t{ids}\t{names}\t{types}\t{match_seq}\t{match_loc}\t{var_part}\t{up20}\n"
+                    files['gene_t1'].write(line)
+                else:
+                    line = f"{g_locs}\t{strand}\t{ids}\t{names}\t{types}\t{match_seq}\t{match_loc}\t{mm_count}\t{up20}\n"
+                    files['gene_t2'].write(line)
+
+    def _scan_rna(self, seq, tid, info, files, fasta):
+        chrom = info['chr']
+        strand = info['strand']
+        
+        exons = self.transcripts[tid]
+        min_s = exons[0][0]
+        max_e = exons[-1][1]
+        tx_loc_str = fmt_loc(chrom, min_s, max_e)
+
+        def buffer_rna_hit(match, mtype, var_part="", mm_count=0):
+            s_idx = match.start()
+            e_idx = match.end()
+            match_seq = match.group(0)
+            
+            rna_loc_str = f"{s_idx+1}-{e_idx}"
+            genomic_loc_str = self.get_rna_genomic_fragments(tid, s_idx, e_idx)
+            
+            up20 = ""
+            if strand == '+':
+                first_base_loc_str = self.get_rna_genomic_fragments(tid, s_idx, s_idx+1)
+                try:
+                    fb_part = first_base_loc_str.split(':')[1].split('-')[0]
+                    g_s_point = int(fb_part) - 1
+                    up20 = get_upstream_20bp(fasta, chrom, g_s_point, g_s_point, strand)
+                except:
+                    up20 = "N"*20
+            else:
+                first_base_loc_str = self.get_rna_genomic_fragments(tid, s_idx, s_idx+1)
+                try:
+                    fb_part = first_base_loc_str.split(':')[1].split('-')[1]
+                    g_e_point = int(fb_part)
+                    up20 = get_upstream_20bp(fasta, chrom, 0, g_e_point, strand)
+                except:
+                    up20 = "N"*20
+            
+            loc_key = (genomic_loc_str, match_seq, var_part, mm_count, up20, strand)
+            
+            details = {
+                'tx_loc': tx_loc_str,
+                'tid': tid,
+                'ttype': info['ttype'],
+                'gid': info['gid'],
+                'gname': info['gname'],
+                'rna_loc': rna_loc_str
+            }
+            
+            self.rna_hits_buffer[mtype].append({'key': loc_key, 'val': details})
+
+        # Scan T1
+        for m in self.regex_type1.finditer(seq):
+            buffer_rna_hit(m, "t1", var_part=m.group(2))
+            
+        # Scan T2 - ADDED overlapped=True
+        for m in self.regex_type2.finditer(seq, overlapped=True):
+            match_seq = m.group(0)
+            
+            if not self._is_core_intact(match_seq):
                 continue
             
-            # Calculate mismatch count
-            errors = sum(match.fuzzy_counts)
+            cnt = sum(m.fuzzy_counts)
+            buffer_rna_hit(m, "t2", mm_count=cnt)
+
+    def _flush_rna_buffer(self, files):
+        print("Aggregating RNA results...")
+        for mtype in ["t1", "t2"]:
+            grouped = defaultdict(list)
+            for item in self.rna_hits_buffer[mtype]:
+                grouped[item['key']].append(item['val'])
             
-            self.write_hit(mode=mode, type_idx="t2", 
-                           obj_id=obj_id, chrom=chrom, strand=strand, 
-                           seq_start_idx=match.start(), seq_end_idx=match.end(), 
-                           match_seq=full_match_seq, extra_info=str(errors), 
-                           fasta=fasta_handle, 
-                           gene_g_start=g_start_0b, gene_g_end=g_end,
-                           rna_coords_map=rna_coords_map)
-
-    def write_hit(self, mode, type_idx, obj_id, chrom, strand, 
-                  seq_start_idx, seq_end_idx, match_seq, extra_info, 
-                  fasta, gene_g_start=0, gene_g_end=0, rna_coords_map=None):
-        
-        # Calculate Genomic Coordinates of the match start/end
-        genomic_start = 0
-        genomic_end = 0
-        upstream20 = ""
-        
-        if mode == "gene":
-            # seq follows strand.
-            # gene_g_start is the 0-based lower numeric coordinate of the gene block on chr.
-            
-            if strand == '+':
-                # Sequence is 5'->3' identical to forward genomic
-                # relative start + absolute start
-                abs_start = gene_g_start + seq_start_idx
-                abs_end = gene_g_start + seq_end_idx
+            for key, details_list in grouped.items():
+                genomic_loc_str, match_seq, var_part, mm_count, up20, strand = key
                 
-                genomic_start = abs_start + 1 # 1-based output? standard bioinformatics is 1-based often
-                genomic_end = abs_end
+                tx_locs = ";".join([d['tx_loc'] for d in details_list])
+                tids    = ";".join([d['tid'] for d in details_list])
+                ttypes  = ";".join([d['ttype'] for d in details_list])
+                gids    = ";".join([d['gid'] for d in details_list])
+                gnames  = ";".join([d['gname'] for d in details_list])
+                r_locs  = ";".join([d['rna_loc'] for d in details_list])
                 
-                upstream20 = get_upstream_seq(fasta, chrom, abs_start, strand, 20)
+                base = f"{tx_locs}\t{strand}\t{tids}\t{ttypes}\t{gids}\t{gnames}"
                 
-            else: # Strand '-'
-
-                # Length of gene seq
-                gene_len = gene_g_end - gene_g_start
-                
-                
-                # Start (higher coord on genome)
-                g_high = gene_g_end - seq_start_idx 
-                # End (lower coord on genome)
-                g_low = gene_g_end - seq_end_idx
-                
-                genomic_start = g_low + 1 # Convert to likely 1-based for output convention
-                genomic_end = g_high
-                
-                # Upstream for '-' strand is having higher coordinates
-                # We need the base physically following g_high
-                # Pass the coordinate corresponding to the 5' end of the motif (which is g_high)
-                upstream20 = get_upstream_seq(fasta, chrom, g_high, strand, 20)
-
-        elif mode == "rna":
-            # Map RNA index to genomic coords
-            try:
-                # rna_coords_map is a list of genomic positions (1-based usually if derived from GTF directly, let's assume 1-based)
-                # But in load_gtf, I stored int(parts[3]).
-                
-                # Get the genomic coordinate of the FIRST base of the match
-                g_start_val = rna_coords_map[seq_start_idx]
-                g_end_val = rna_coords_map[seq_end_idx - 1] # inclusive last base
-                
-                genomic_start = g_start_val
-                genomic_end = g_end_val
-                
-                if strand == '+':
-                    # Upstream is lower coordinate. g_start_val is 1-based.
-                    # Convert to 0-based for pysam fetch
-                    up_ref = g_start_val - 1
-                    upstream20 = get_upstream_seq(fasta, chrom, up_ref, strand, 20)
+                if mtype == "t1":
+                    line = f"{base}\t{match_seq}\t{var_part}\t{r_locs}\t{genomic_loc_str}\t{up20}\n"
+                    files['rna_t1'].write(line)
                 else:
-
-                    
-                    upstream20 = get_upstream_seq(fasta, chrom, g_start_val, strand, 20)
-                    
-            except IndexError:
-                genomic_start = "BoundErr"
-                genomic_end = "BoundErr"
-                upstream20 = "NNN"
-
-        # Write to file
-        file_key = f"{mode}_{type_idx}"
-        outfile = self.out_files[file_key]
-        
-        if mode == "gene":
-            # columns: GeneID, Chr, LoopStart, LoopEnd, LoopStrand, Upstream, MatchSeq, Extra
-            outfile.write(f"{obj_id}\t{chrom}\t{genomic_start}\t{genomic_end}\t{strand}\t{upstream20}\t{match_seq}\t{extra_info}\n")
-        else:
-            # columns: TransID, Chr, LoopStart, LoopEnd, LoopStrand, RNA_Index, Upstream, MatchSeq, Extra
-            rna_pos_str = f"{seq_start_idx+1}-{seq_end_idx}"
-            outfile.write(f"{obj_id}\t{chrom}\t{genomic_start}\t{genomic_end}\t{strand}\t{rna_pos_str}\t{upstream20}\t{match_seq}\t{extra_info}\n")
-
-# -----------------------------------------------------------------------------
-# Main Execution
-# -----------------------------------------------------------------------------
+                    line = f"{base}\t{match_seq}\t{mm_count}\t{r_locs}\t{genomic_loc_str}\t{up20}\n"
+                    files['rna_t2'].write(line)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="TDOscanner: Search gene/RNA motifs.")
-    parser.add_argument("fasta", help="Path to reference genome (hg38.fa)")
-    parser.add_argument("gtf", help="Path to annotation file (hg38.gtf)")
-    parser.add_argument("pattern", help="Sequence pattern, e.g., GTTTA(GA)GCTA")
-    parser.add_argument("range", help="Variable length range for Type 1, e.g., 2-6")
-    parser.add_argument("mismatch", help="Max allowed mismatches for Type 2, e.g., 2")
+    parser = argparse.ArgumentParser(description="TDO scanner with overlapped regex search")
+    parser.add_argument("fasta", help="Genomic FASTA file")
+    parser.add_argument("gtf", help="Annotation GTF file")
+    parser.add_argument("pattern", help="Format: LEFT(MIDDLE)RIGHT, e.g., ACG(T)GCA")
+    parser.add_argument("range", help="Variable length range, e.g., 1-5")
+    parser.add_argument("mismatch", help="Max mismatches allowed for Type 2")
     
     args = parser.parse_args()
     

@@ -21,7 +21,7 @@ from collections import defaultdict
 
 def reverse_complement(seq):
     complement = str.maketrans('ATCGNatcgn', 'TAGCNtagcn')
-    return seq.translate(complement)[::-1]a
+    return seq.translate(complement)[::-1]
 
 def parse_input_pattern(pattern_str):
     match = re.match(r"([ACGTNacgtn]+)\(([ACGTNacgtn]+)\)([ACGTNacgtn]+)", pattern_str)

@@ -72,7 +72,8 @@ gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
 ```
 python tdo_scanner.py hg38.fa hg38.gtf "GTTTTA(GA)GCTA" "2-6" 2
 python get_candidate_offtarget.py hg38.fa
-#python get_candidate_offtarget.py hg38.fa -m 2 #default mismatch=1, can set to 0 or 2
+#python get_candidate_offtarget.py hg38.fa -m 2
+#default mismatch=1, can set to 0 or 2
 ```
 
 ## Input Pattern Format
@@ -110,6 +111,15 @@ Transcript_location	Strand	TranscriptID	TranscriptBiotype	GeneID	GeneName	Matche
 Transcript_location	Strand	TranscriptID	TranscriptBiotype	GeneID	GeneName	MatchedSequence	MismatchCount	RNA_Location	Genomic_Location	upstream20bp	MM0_Count	MM1_Count	MM0_Locations	MM1_Locations
 
 ```
+### Genome-wide mapping locations of the 20-bp upstream sequence (with ≤ 2 mismatches)  output 
+```
+#example
+6:93077882-93077901:-:1
+location:6:93077882-93077901
+strand:-
+mismatch number with upstream20bp sequence:1
+```
+
 ## Algorithm Details
 ### Type 1 Scanning
 - Uses regex pattern: LEFT + [ACGTN]{min,max} + RIGHT

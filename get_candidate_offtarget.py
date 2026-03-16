@@ -10,6 +10,7 @@ Function:
    - Definition: 20bp upstream of NGG or 20bp downstream of CCN.
    - Matches allowed: 0, 1, or 2 mismatches (configurable).
 4. Output new files containing off-target statistics appended to the original data.
+5. Output all match locations to a separate MMdata file for EACH input file.
 """
 
 import argparse
@@ -31,7 +32,7 @@ def reverse_complement(seq):
 def generate_1mm_variants(seq):
     """Generate all sequences with exactly 1 mismatch."""
     variants = set()
-    bases = ['A', 'C', 'G', 'T']
+    bases =['A', 'C', 'G', 'T']
     seq_list = list(seq)
     length = len(seq)
     
@@ -47,7 +48,7 @@ def generate_1mm_variants(seq):
 def generate_2mm_variants(seq):
     """Generate all sequences with exactly 2 mismatches."""
     variants = set()
-    bases = ['A', 'C', 'G', 'T']
+    bases =['A', 'C', 'G', 'T']
     length = len(seq)
     
     # Use combinations to pick 2 positions to change
@@ -121,16 +122,10 @@ def scan_chromosome(args):
     # ---------------------------------------------------------
     # 1. Forward Strand Logic (Look for [20bp] + NGG)
     # ---------------------------------------------------------
-    # pos is the index of the first 'G' in 'NGG'
     pos = 0
     while True:
         pos = seq.find('GG', pos)
         if pos == -1: break
-        
-        # PAM is NGG. 'GG' is at pos, pos+1.
-        # N is at pos-1.
-        # 20bp target ends at pos-2. 
-        # 20bp target starts at pos-1 - 20 = pos - 21.
         
         start_idx = pos - 21
         if start_idx >= 0:
@@ -145,16 +140,10 @@ def scan_chromosome(args):
     # ---------------------------------------------------------
     # 2. Reverse Strand Logic (Look for CCN + [20bp])
     # ---------------------------------------------------------
-    # pos is the index of the first 'C' in 'CC'
     pos = 0
     while True:
         pos = seq.find('CC', pos)
         if pos == -1: break
-        
-        # CCN starts at pos.
-        # CC at pos, pos+1. N at pos+2.
-        # 20bp target starts at pos+3.
-        # 20bp target ends at pos+3+20 = pos+23.
         
         start_idx = pos + 3
         end_idx = pos + 23
@@ -187,7 +176,7 @@ class OffTargetScanner:
             'rna_t2': "output_matureRNA_type2.txt"
         }
         if not input_files:
-            self.inputs = [f for f in self.target_files.values() if os.path.exists(f)]
+            self.inputs =[f for f in self.target_files.values() if os.path.exists(f)]
         else:
             self.inputs = input_files
 
@@ -223,7 +212,7 @@ class OffTargetScanner:
         with pysam.FastaFile(self.fasta) as f:
             chroms = f.references
         
-        pool_args = [(chrom, self.fasta, search_set) for chrom in chroms]
+        pool_args =[(chrom, self.fasta, search_set) for chrom in chroms]
         
         # Use 75% of CPUs
         n_cpu = max(1, int(multiprocessing.cpu_count() * 0.75))
@@ -257,44 +246,46 @@ class OffTargetScanner:
         header_suffix = ""
         for i in range(self.max_mismatch + 1):
             header_suffix += f"\tMM{i}_Count\tMM{i}_Locations"
-        header_suffix += "\n"
         
         # Pre-calculate empty string for invalid rows to avoid recalc inside loop
-        # Each mismatch level adds 2 columns: Count and Location.
         empty_cols = ("\t0\t-" * (self.max_mismatch + 1))
         
         for fname in self.inputs:
             print(f"Processing results for {fname}...")
-            out_name = os.path.splitext(fname)[0] + "_w_offtarget.txt"
             
-            with open(fname, 'r') as fin, open(out_name, 'w') as fout:
+            # Extract base name to create dynamic output filenames
+            base_name = os.path.splitext(fname)[0]
+            out_name = base_name + "_w_offtarget.txt"
+            mm_out_name = base_name + "_MMdata.txt"  
+            
+            # open MMdata
+            with open(fname, 'r') as fin, \
+                 open(out_name, 'w') as fout, \
+                 open(mm_out_name, 'w') as mm_out:
+                
                 # Header
                 header = fin.readline().strip()
-                fout.write(header + header_suffix)
+                fout.write(header + header_suffix + "\n")
                 
                 # Detect column index for upstream20bp
                 cols = header.split('\t')
-                try:
-                    c_idx = -1
-                    for i, c in enumerate(cols):
-                        if "upstream20bp" in c:
-                            c_idx = i
-                            break
-                    if c_idx == -1: c_idx = -1 
-                except:
-                    c_idx = -1
+                c_idx = -1
+                for i, c in enumerate(cols):
+                    if "upstream20bp" in c:
+                        c_idx = i
+                        break
 
                 for line in fin:
                     line = line.strip()
+                    if not line: continue
                     parts = line.split('\t')
-                    if not parts: continue
                     
-                    try:
-                        query = parts[c_idx].upper()
-                    except IndexError:
+                    if c_idx == -1 or len(parts) <= c_idx:
                         # Handle missing column or malformed line
                         fout.write(line + empty_cols + "\n")
                         continue
+                        
+                    query = parts[c_idx].upper()
                         
                     if 'N' in query or len(query) != 20:
                         fout.write(line + empty_cols + "\n")
@@ -305,24 +296,25 @@ class OffTargetScanner:
                     
                     # Check for MM0, MM1, MM2 sequentially
                     for mm_level in range(self.max_mismatch + 1):
-                        current_hits = []
+                        current_hits =[]
                         
                         if mm_level == 0:
-                            # Direct lookup
                             if query in global_hits:
                                 current_hits = global_hits[query]
                         elif mm_level == 1:
-                            # Re-generate variants to lookup their hits
                             variants = generate_1mm_variants(query)
                             for v in variants:
                                 if v in global_hits:
                                     current_hits.extend(global_hits[v])
                         elif mm_level == 2:
-                            # Re-generate variants to lookup their hits
                             variants = generate_2mm_variants(query)
                             for v in variants:
                                 if v in global_hits:
                                     current_hits.extend(global_hits[v])
+                        
+                        # 写入到当前文件专属的 output_MMdata.txt 中
+                        for loc in current_hits:
+                            mm_out.write(f"{loc}:{mm_level}\n")
                         
                         count_str, loc_str = self.format_locations(current_hits)
                         result_line += f"\t{count_str}\t{loc_str}"
@@ -330,6 +322,7 @@ class OffTargetScanner:
                     fout.write(result_line + "\n")
             
             print(f"Written: {out_name}")
+            print(f"Written: {mm_out_name}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Find candidate CRISPR off-targets for TDOscanner results")

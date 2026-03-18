@@ -27,13 +27,18 @@ conda activate TDOscanner
 ```
 git clone https://github.com/Xiaoguo-Zheng/TDOscanner.git
 cd tdo-scanner
+
 python tdo_scanner.py --help  
-python get_candidate_offtarget.py --help   
+
+python get_candidate_offtarget.py --help
+
+python guideseq_dsODN_scanner.py --help
 ```
 ## Usage
 ### Basic Command
 `python tdo_scanner.py <genome.fa> <annotation.gtf> <pattern> <range> <mismatch>`
-`python get_candidate_offtarget.py <genome.fa> `
+`python get_candidate_offtarget.py <genome.fa> ` 
+`python guideseq_dsODN_scanner.py -i <aligned.sam>   -o <All_dsODN_Sites.tsv>  -f </path/to/hg38.fa>  -w 25 -q 20`
 
 ### Arguments
 |Argument|Description|Example|
@@ -70,10 +75,24 @@ gunzip Mus_musculus.GRCm39.113.chr.gtf.gz
 
 ## Example
 ```
+## search candidate locus
 python tdo_scanner.py hg38.fa hg38.gtf "GTTTTA(GA)GCTA" "2-6" 2
+
+## get_candidate_offtarget
 python get_candidate_offtarget.py hg38.fa
 #python get_candidate_offtarget.py hg38.fa -m 2
 #default mismatch=1, can set to 0 or 2
+
+## merge all MMdata 
+cat *MMdata.txt | cut -d ':' -f 1-3 | sort -u > Merged_Unique_MMdata.txt
+
+## GUIDE-seq Genome-wide dsODN Scanner
+python guideseq_dsodn_scanner.py \
+    -i /path/to/aligned_reads.sam \
+    -o All_dsODN_Sites.tsv \
+    -f /path/to/hg38.fa \
+    -w 25 -q 20
+
 ```
 
 ## Input Pattern Format
@@ -119,6 +138,8 @@ location:6:93077882-93077901
 strand:-
 mismatch number with upstream20bp sequence:1
 ```
+
+
 
 ## Algorithm Details
 ### Type 1 Scanning

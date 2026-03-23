@@ -94,7 +94,7 @@ def analyze_bam(bam_file, output_file, fasta_file=None, window_size=25, min_mapq
             })
 
     print(f"[INFO] Performing official fixed-width clustering (window <= {window_size}bp) ...")
-    clusters = []
+    clusters =[]
     for chrom in sorted(raw_sites.keys()):
         chrom_reads =[]
         for pos in sorted(raw_sites[chrom].keys()):
@@ -124,16 +124,17 @@ def analyze_bam(bam_file, output_file, fasta_file=None, window_size=25, min_mapq
         print(f"[INFO] Loading Reference Genome: {fasta_file} ...")
         fasta = pysam.FastaFile(fasta_file)
         
-    print("[INFO] Generating official-style dsODN integration report ...")
+    print("[INFO] Generating official-style dsODN integration report with Strict Filters ...")
 
     with open(output_file, 'w') as out:
-        # Construct exact official headers
+        # Construct exact official headers (Total_Reads removed as requested)
         header =[
             "BED_Chromosome", "BED_Min.Position", "BED_Max.Position", "BED_Name",
             "Position", "WindowSequence",
             "+.mi", "-.mi", "bi.sum.mi", "bi.geometric_mean.mi",
             "+.total", "-.total", "total.sum",
             "position.stdev",
+            "Filter_Pass",
             "Reads_per_UMI_Detail"
         ]
         
@@ -163,15 +164,26 @@ def analyze_bam(bam_file, output_file, fasta_file=None, window_size=25, min_mapq
                 except KeyError:
                     pass
             
+            # [Core Modification]: Define Filter logic
+            total_reads = cl["total_sum"]
+            
+            # Check conditions: +.mi >= 1 AND -.mi >= 1 AND total_reads >= 3 AND bi.geom_mean >= 2
+            # Note: bi.geom_mean >= 2 mathematically requires (+.mi * -.mi) >= 4
+            if cl["plus_mi"] >= 1 and cl["minus_mi"] >= 1 and total_reads >= 3 and cl["bi_geom_mean"] >= 2.0:
+                filter_pass = "Y"
+            else:
+                filter_pass = "N"
+            
             umi_details = ", ".join([f"{u}:{c}" for u, c in cl["umi_details_counter"].most_common()])
             
-            # Assemble row in official order
+            # Assemble row with the new columns (Total_Reads removed)
             row_data =[
                 chrom, str(c_start), str(c_end), bed_name,
                 str(peak_pos), window_seq,
                 str(cl["plus_mi"]), str(cl["minus_mi"]), str(cl["bi_sum_mi"]), f"{cl['bi_geom_mean']:.2f}",
                 str(cl["plus_total"]), str(cl["minus_total"]), str(cl["total_sum"]),
                 f"{cl['pos_stdev']:.2f}",
+                filter_pass,
                 umi_details
             ]
             
